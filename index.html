@@ -82,7 +82,7 @@ const PRESETS=["힌트가 필요하면 화면 아래를 눌러 보세요.","남�
 /* ===================================== */
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-let db=null,G={status:'idle',totalMs:600000,hintIdx:-1},H=[],R=[],hsEx=false,hsLoaded=false,ED=[],AC=null,lastSec=-1,tvHold=false,alarmed=null,role=null,view='main',sel=-1,cd=0,cdT=null,built=false,edBuilt=false,ended=false,primed=false,lastN=null,off=0,pinOk=false,lastP='',spoke={},swapT=0,filled=false,sLoaded=false,bHead='',bRows='';
+let db=null,G={status:'idle',totalMs:600000,hintIdx:-1},H=[],R=[],hsEx=false,hsLoaded=false,hsErr=false,ED=[],AC=null,lastSec=-1,tvHold=false,alarmed=null,role=null,view='main',sel=-1,cd=0,cdT=null,built=false,edBuilt=false,ended=false,primed=false,lastN=null,off=0,pinOk=false,lastP='',spoke={},swapT=0,filled=false,sLoaded=false,bHead='',bRows='';
 let S={mn:10,sc:0,pp:30,bn:10,m1:'10초 후 게임이 시작됩니다. 준비해 주세요.',m2:'게임을 시작합니다. 행운을 빕니다.'};
 const now=()=>Date.now()+off;
 const phase=()=>G.status==='running'&&G.startAt&&now()<G.startAt?'prep':G.status;
@@ -117,9 +117,9 @@ async function init(){
     db={doc,collection:col}}}catch(e){db=null}
   render();if(!db)return;
   db.doc('game/state').onSnapshot(s=>{if(s.exists){G={...G,...s.data()}}render()},()=>{});
-  db.doc('settings').onSnapshot(s=>{if(s.exists)S={...S,...s.data()};sLoaded=true;fillAdmin()},()=>{});
+  db.doc('settings').onSnapshot(s=>{if(s.exists)S={...S,...s.data()};sLoaded=true;fillAdmin()},()=>{sLoaded=true;fillAdmin()});
   db.doc('announce').onSnapshot(s=>{if(!s.exists){if(lastN===null)lastN=0;return}const d=s.data();if(lastN===null){lastN=d.n;return}if(d.n!==lastN){lastN=d.n;if(role==='player')speak(d.text)}},()=>{});
-  db.doc('hintset').onSnapshot(sn=>{hsEx=sn.exists;const d=sn.exists?(sn.data()||{}):{};H=Array.isArray(d.items)?d.items:Object.values(d.items||{});hsLoaded=true;if(role==='admin'&&built&&!edBuilt)buildEd();render()},()=>{});
+  db.doc('hints/set').onSnapshot(sn=>{hsEx=sn.exists;const d=sn.exists?(sn.data()||{}):{};H=Array.isArray(d.items)?d.items:Object.values(d.items||{});hsLoaded=true;hsErr=false;if(role==='admin'&&built&&!edBuilt)buildEd();render()},()=>{hsLoaded=true;hsErr=true;if(role==='admin'&&built&&!edBuilt)buildEd()});
   db.collection('records').onSnapshot(q=>{R=q.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.clear?1:0)-(a.clear?1:0)||(a.clear?a.clearMs-b.clearMs:a.ts-b.ts));render()},()=>{});
   setInterval(tick,100);
 }
@@ -259,6 +259,7 @@ function buildEd(){
   edBuilt=true;
   ED=Array.from({length:hn()},(_,i)=>({title:H[i]?.title||'',text:H[i]?.text||'',img:H[i]?.img||''}));
   drawEd();
+  if(hsErr)$('#hmsg').textContent='힌트를 불러오지 못했어요. Firebase 규칙(Rules)을 확인해 주세요.';
 }
 function drawEd(){
   const ed=$('#ed');if(!ed)return;ed.innerHTML='';
@@ -275,7 +276,7 @@ function drawEd(){
     ed.append(d)});
   const r=document.createElement('div');r.className='row';r.innerHTML='<button id="ha">+ 힌트 추가</button><button id="hsv">힌트 저장</button><span class="lbl" id="hmsg"></span>';ed.append(r);
   $('#ha').onclick=()=>{if(ED.length>=10){$('#hmsg').textContent='힌트는 최대 10개까지예요';return}ED.push({title:'',text:'',img:''});drawEd();dirty()};
-  $('#hsv').onclick=async()=>{try{await db.doc('hintset').set({n:ED.length,items:ED});$('#hmsg').textContent='저장됨 ✓'}catch(e){$('#hmsg').textContent='저장 실패'}};
+  $('#hsv').onclick=async()=>{try{await db.doc('hints/set').set({n:ED.length,items:ED});$('#hmsg').textContent='저장됨 ✓'}catch(e){$('#hmsg').textContent='저장 실패 — Firebase 규칙(Rules)을 확인해 주세요'}};
 }
 function shrink(f,cb){const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const k=Math.min(1,480/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=im.width*k;c.height=im.height*k;c.getContext('2d').drawImage(im,0,0,c.width,c.height);cb(c.toDataURL('image/jpeg',.6))};im.src=r.result};r.readAsDataURL(f)}
 const hn=()=>hsEx?H.length:4;
@@ -285,8 +286,8 @@ function tickBeep(hi){const c=actx();if(c)beep(c.currentTime+.01,.08,hi?1500:100
 function alarm(){const c=actx();if(!c)return;const t0=c.currentTime+.05;for(let g=0;g<5;g++)for(let k=0;k<4;k++)beep(t0+g+k*.14,.09,k===3?2000:1600,.4)}
 function tv(a){
   document.body.className='dark';
-  const p=phase(),fin=p==='finished'&&!tvHold,k='tv|'+p+'|'+fin+'|'+primed+'|'+G.result;
-  const h=fin?`<div class="full"><div class="c" style="text-align:center;padding:0 5vw"><div class="tvt">${G.result==='clear'?'탈출 성공':'시간 종료'}</div><div class="tvm">태블릿 화면에서 리더보드를 입력하고<br>안내에 따라 퇴장해주세요.</div></div></div>`
+  const p=phase(),end=p==='finished'||tvHold,k='tv|'+(end?'end|'+tvHold+'|'+G.result:p+'|'+primed);
+  const h=end?`<div class="full"><div class="c" style="text-align:center;padding:0 5vw"><div class="tvt">${G.result==='clear'?'탈출 성공':'시간 종료'}</div>${tvHold?'':'<div class="tvm">태블릿 화면에서 리더보드를 입력하고<br>안내에 따라 퇴장해주세요.</div>'}</div></div>`
    :`<div class="full"><div class="c"><div class="lbl" style="font-size:clamp(20px,3vw,40px)">${p==='prep'?'게임 시작까지':'남은 시간'}</div><div class="huge" data-timer>${tHTML(shown())}</div>${primed?'':'<div class="mini">화면을 한 번 클릭하면 소리가 켜집니다</div>'}</div></div>`;
   show(a,k,h);
 }
