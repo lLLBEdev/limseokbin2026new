@@ -31,7 +31,7 @@ body.dark{background:#000;color:#fff}body.light{background:#fff;color:#000}
 .huge{font-size:clamp(90px,26vw,320px);line-height:1}.huge .big{font-size:inherit}.huge .u{font-size:.17em}
 .bar{background:#262626;border-radius:24px;padding:26px;text-align:center;font-size:clamp(18px,3vw,30px);cursor:pointer;transition:transform .2s ease,background .3s ease}
 .bar:active{transform:scale(.98)}.bar.w{background:#fff;color:#000;margin-top:16px;padding:18px}
-.cards{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
+.cards{display:grid;grid-template-columns:repeat(var(--cols,4),1fr);gap:14px}
 .card{position:relative;aspect-ratio:338/552;border-radius:14px;background:#1a0a0e url(card.jpg) center/cover;cursor:pointer;transition:transform .3s cubic-bezier(.2,.8,.2,1),opacity .4s ease,box-shadow .3s ease;animation:enter .5s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--i,0)*70ms)}
 .card span{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);background:#fff;color:#000;border-radius:10px;padding:8px 18px;white-space:nowrap}
 @media(hover:hover){.card:not(.lock):hover{transform:translateY(-8px);box-shadow:0 14px 30px #a3122a66}}
@@ -54,6 +54,7 @@ input:focus,textarea:focus{outline:0;border-color:#ff9494;box-shadow:0 0 0 4px #
 .rk{background:#f0f0f0;border-radius:36px;padding:0 2vw;display:flex;gap:2vw;align-items:center;min-height:0;font-size:min(3.2vw,calc(68vh / var(--n,5) * .4))}
 .rk b{min-width:2.3em;white-space:nowrap}.rk i{flex:1;font-style:normal;line-height:1.15;overflow:hidden;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}.rk em{font-style:normal;font-weight:700;white-space:nowrap}
 .xl{position:fixed;right:10px;bottom:8px;background:#000;color:#fff;font-size:13px;padding:6px 12px;opacity:.1}.xl:hover{opacity:1}
+.tvt{font-size:clamp(40px,8vw,120px);font-weight:800}.tvm{font-size:clamp(26px,4.6vw,76px);line-height:1.45;margin-top:3vh}
 #home{position:fixed;left:0;top:0;width:72px;height:72px;z-index:99}
 .rb{text-align:left;background:#1a1a1a;color:#fff;border-left:8px solid var(--c);border-radius:18px;display:flex;flex-direction:column;gap:6px}.rb b{font-size:24px}.rb small{color:#aaa;font-size:15px}
 .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:10px 0}
@@ -77,11 +78,11 @@ const firebaseConfig={
   appId:"1:1051441202849:web:41f48b596de164d4dd92e0"
 };
 const ADMIN_PIN="2317";
-const PRESETS=["힌트가 필요하면 화면 아래를 눌러 보세요.","남은 시간이 5분입니다.","남은 시간이 1분입니다. 서둘러 주세요.","시간이 종료되었습니다. 기기를 들고 나와 주세요."];
+const PRESETS=["힌트가 필요하면 화면 아래를 눌러 보세요.","남은 시간이 5분입니다.","남은 시간이 1분입니다. 서둘러 주세요.","시간이 종료되었습니다. 기기는 그대로 두고 퇴장해 주세요."];
 /* ===================================== */
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-let db=null,G={status:'idle',totalMs:600000,hintIdx:-1},H=[],R=[],role=null,view='main',sel=-1,cd=0,cdT=null,built=false,edBuilt=false,ended=false,primed=false,lastN=null,off=0,pinOk=false,lastP='',spoke={},swapT=0,filled=false,sLoaded=false,bHead='',bRows='';
+let db=null,G={status:'idle',totalMs:600000,hintIdx:-1},H=[],R=[],hsEx=false,hsLoaded=false,ED=[],AC=null,lastSec=-1,tvHold=false,alarmed=null,role=null,view='main',sel=-1,cd=0,cdT=null,built=false,edBuilt=false,ended=false,primed=false,lastN=null,off=0,pinOk=false,lastP='',spoke={},swapT=0,filled=false,sLoaded=false,bHead='',bRows='';
 let S={mn:10,sc:0,pp:30,bn:10,m1:'10초 후 게임이 시작됩니다. 준비해 주세요.',m2:'게임을 시작합니다. 행운을 빕니다.'};
 const now=()=>Date.now()+off;
 const phase=()=>G.status==='running'&&G.startAt&&now()<G.startAt?'prep':G.status;
@@ -108,7 +109,8 @@ async function init(){
   role=hashRole();
   addEventListener('hashchange',()=>{const r=hashRole();if(r!==role)goRole(r)});
   let hT;const hm=$('#home');hm.onpointerdown=()=>{hT=setTimeout(()=>goRole(null),1500)};['onpointerup','onpointerleave','onpointercancel'].forEach(e=>hm[e]=()=>clearTimeout(hT));
-  document.addEventListener('pointerdown',()=>{if(!primed){primed=true;try{speechSynthesis.speak(new SpeechSynthesisUtterance(''))}catch(e){}if(role==='player')render()}});
+  const prime=()=>{if(primed)return;primed=true;actx();try{speechSynthesis.speak(new SpeechSynthesisUtterance(''))}catch(e){}if(role==='player'||role==='tv')render()};
+  document.addEventListener('pointerdown',prime);document.addEventListener('keydown',prime);
   try{if(firebaseConfig.databaseURL){firebase.initializeApp(firebaseConfig);const f=firebase.database();f.ref('.info/serverTimeOffset').on('value',x=>{off=x.val()||0});
     const doc=p=>({set:d=>f.ref(p).set(d),delete:()=>f.ref(p).remove(),onSnapshot:(n,e)=>f.ref(p).on('value',x=>n({exists:x.exists(),data:()=>x.val()}),e)});
     const col=p=>({add:d=>f.ref(p).push(d),onSnapshot:(n,e)=>f.ref(p).on('value',x=>{const docs=[];x.forEach(ch=>{docs.push({id:ch.key,data:()=>ch.val()})});n({docs})},e)});
@@ -117,27 +119,35 @@ async function init(){
   db.doc('game/state').onSnapshot(s=>{if(s.exists){G={...G,...s.data()}}render()},()=>{});
   db.doc('settings').onSnapshot(s=>{if(s.exists)S={...S,...s.data()};sLoaded=true;fillAdmin()},()=>{});
   db.doc('announce').onSnapshot(s=>{if(!s.exists){if(lastN===null)lastN=0;return}const d=s.data();if(lastN===null){lastN=d.n;return}if(d.n!==lastN){lastN=d.n;if(role==='player')speak(d.text)}},()=>{});
-  db.collection('hints').onSnapshot(q=>{H=[];q.docs.forEach(d=>{H[+d.id.slice(1)]=d.data()});if(role==='admin'&&built&&!edBuilt)buildEd();render()},()=>{});
+  db.doc('hintset').onSnapshot(sn=>{hsEx=sn.exists;const d=sn.exists?(sn.data()||{}):{};H=Array.isArray(d.items)?d.items:Object.values(d.items||{});hsLoaded=true;if(role==='admin'&&built&&!edBuilt)buildEd();render()},()=>{});
   db.collection('records').onSnapshot(q=>{R=q.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.clear?1:0)-(a.clear?1:0)||(a.clear?a.clearMs-b.clearMs:a.ts-b.ts));render()},()=>{});
-  setInterval(tick,250);
+  setInterval(tick,100);
 }
 function tick(){
-  const p=phase();if(p!==lastP){lastP=p;render()}
+  const p=phase(),prev=lastP;if(p!==lastP){lastP=p;render()}
   const ms=shown(),warn=p==='running'&&ms<=60000,pu=p==='running'&&ms<=10000;
   document.querySelectorAll('[data-timer]').forEach(e=>{upd(e,ms);e.classList.toggle('warn',warn);e.classList.toggle('pulse',pu)});
-  if(p==='running'&&ms<=0&&!ended&&role!=='board'&&db){ended=true;set({status:'finished',remainMs:0,result:'timeout',registered:false})}
+  if(p==='running'&&ms<=0&&!ended&&(role==='admin'||role==='player')&&db){ended=true;set({status:'finished',remainMs:0,result:'timeout',registered:false})}
   if(G.status!=='running')ended=false;
   if(role==='player'&&G.status==='running'&&G.startAt){const r=G.startAt-now();
     if(r>0&&r<=10000&&spoke.a!==G.startAt){spoke.a=G.startAt;speak(G.msgPre)}
     if(r<=0&&r>-3000&&spoke.b!==G.startAt){spoke.b=G.startAt;speak(G.msgStart)}}
+  if(role==='tv'){
+    const sec=Math.ceil(ms/1000);
+    if(p==='running'&&ms>0&&sec!==lastSec&&primed)tickBeep(sec<=10);
+    lastSec=p==='running'?sec:-1;
+    const fin=(p==='running'&&ms<=0)||(p==='finished'&&G.result==='timeout'&&prev==='running');
+    if(fin&&alarmed!==G.startAt){alarmed=G.startAt;tvHold=true;if(primed)alarm();setTimeout(()=>{tvHold=false;render()},5300);render()}
+  }
 }
 function render(){
   const a=$('#app');
   if(!db){document.body.className='dark';a.innerHTML='<div class="wrap"><h2>설정이 비어 있거나 연결할 수 없습니다</h2></div>';return}
-  if(!role){document.body.className='dark';built=false;show(a,'pick','<div class="pick"><h2>이 기기의 역할을 선택하세요</h2><button class="rb" data-r="player" style="--c:#ff9494"><b>타이머 기기</b><small>체험자가 들고 다니는 태블릿 · 남은 시간, 힌트, 기록 입력</small></button><button class="rb" data-r="board" style="--c:#7cc4ff"><b>리더보드</b><small>부스 앞 큰 화면 · 남은 시간, 순위</small></button><button class="rb" data-r="admin" style="--c:#ffd166"><b>관리도구</b><small>진행자 전용 · 시작, 음성 안내, 힌트, 기록</small></button><p class="lbl">주소 끝에 #player, #board, #admin 을 붙이면 이 화면 없이 바로 열려요.</p></div>',()=>
+  if(!role){document.body.className='dark';built=false;show(a,'pick','<div class="pick"><h2>이 기기의 역할을 선택하세요</h2><button class="rb" data-r="player" style="--c:#ff9494"><b>타이머 기기</b><small>체험자가 들고 다니는 태블릿 · 남은 시간, 힌트, 기록 입력</small></button><button class="rb" data-r="board" style="--c:#7cc4ff"><b>리더보드</b><small>부스 앞 큰 화면 · 남은 시간, 순위</small></button><button class="rb" data-r="tv" style="--c:#8be28b"><b>TV</b><small>방 안 TV · 남은 시간만 표시, 1초마다 삑, 종료 시 경보음</small></button><button class="rb" data-r="admin" style="--c:#ffd166"><b>관리도구</b><small>진행자 전용 · 시작, 음성 안내, 힌트, 기록</small></button><p class="lbl">주소 끝에 #player, #board, #tv, #admin 을 붙이면 이 화면 없이 바로 열려요.</p></div>',()=>
     a.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>goRole(b.dataset.r)));return}
   if(role==='player')return player(a);
   if(role==='board')return board(a);
+  if(role==='tv')return tv(a);
   document.body.className='dark';
   if(ADMIN_PIN&&!pinOk){built=false;show(a,'pin','<div class="pick"><h2>관리도구 비밀번호</h2><input id="pin" type="password" inputmode="numeric"><button id="pok">확인</button><div id="pe" class="mini"></div></div>',()=>{$('#pin').onkeydown=e=>{if(e.key==='Enter')$('#pok').click()};$('#pok').onclick=()=>{if($('#pin').value===ADMIN_PIN){pinOk=true;a.dataset.k='';render()}else{$('#pin').value='';$('#pe').textContent='비밀번호가 맞지 않습니다.'}}});return}
   admin(a);
@@ -148,7 +158,7 @@ function player(a){
   const p=phase(),used=G.hintIdx>=0,can=p==='running';
   if(p==='finished')return endScreen(a);
   document.body.className='dark';
-  const k=[view,p,G.hintIdx,sel,primed,view==='card'?hs():''].join('|');
+  const k=[view,p,G.hintIdx,sel,primed,hn(),view==='card'?hs():''].join('|');
   if(a.dataset.k===k)return;
   let h;
   if(view==='main'){
@@ -160,8 +170,8 @@ function player(a){
     }else if(view==='confirm'){
       h+=`<div class="conf"><div class="card"><span>힌트${sel+1}</span></div><div class="t"><p><b>“힌트 ${sel+1}”</b> 카드를 정말 열어보시겠습니까?<br>힌트는 단 한번만 열어 볼 수 있습니다.</p><p class="lbl">선택한 힌트는 시간 제한이 끝나기 전까지 “힌트목록”에 표시됩니다.</p></div><div class="b"><button id="go" class="${cd>0?'pink':''}" ${cd>0?'disabled':''}>${cd>0?cd+'초 후 선택 가능':'힌트카드 보기'}</button><button id="back">힌트 목록 화면으로</button></div></div>`;
     }else{
-      h+='<div class="cards">';
-      for(let i=0;i<5;i++){const m=used&&G.hintIdx===i,lock=(used&&!m)||(!can&&!m);h+=`<div class="card ${lock?'lock':''} ${m?'done':''}" data-i="${i}" style="--i:${i}"><span>힌트${i+1}${m?' ✓':''}</span></div>`}
+      h+=`<div class="cards" style="--cols:${Math.min(hn(),6)}">`;
+      for(let i=0;i<hn();i++){const m=used&&G.hintIdx===i,lock=(used&&!m)||(!can&&!m);h+=`<div class="card ${lock?'lock':''} ${m?'done':''}" data-i="${i}" style="--i:${i}"><span>힌트${i+1}${m?' ✓':''}</span></div>`}
       h+=`</div><div class="bar w" id="close0">힌트 카드를 닫으려면 여기를 누르세요.</div>`+(!can?'<p class="mini">지금은 힌트를 열 수 없습니다.</p>':'');
     }
     h+='</div></div>';
@@ -183,12 +193,12 @@ function endScreen(a){
   document.body.className='light';view='main';
   const clear=G.result==='clear';
   if(!G.registered){
-    show(a,'form'+clear,`<div class="end"><div data-timer>${tHTML(shown())}</div><h1>${clear?'탈출 완료':'시간 종료'}</h1><p style="font-size:20px"><b>기기를 들고 부스 앞으로 나와 주세요.</b><br>리더보드에 등록하려면 대표자의 이름과 학번, 인원을 입력하십시오.<br>입력 시, 부스 앞 화면에 표시됩니다.</p>
+    show(a,'form'+clear,`<div class="end"><div data-timer>${tHTML(shown())}</div><h1>${clear?'탈출 완료':'시간 종료'}</h1><p style="font-size:20px"><b>기기는 그대로 두고 퇴장해 주세요.</b><br>리더보드에 등록하려면 대표자의 이름과 학번, 인원을 입력하십시오.<br>입력 시, 부스 앞 화면에 표시됩니다.</p>
     <input id="fn" placeholder="여기에 대표자 이름을 입력하세요."><input id="fs" inputmode="numeric" placeholder="여기에 학번을 입력하세요."><input id="fc" type="number" min="1" inputmode="numeric" placeholder="본인을 포함하여 몇명인지 입력하세요."><div id="er" class="mini"></div><button id="fok">완료</button></div>`,()=>{
       $('#fok').onclick=async()=>{const n=$('#fn').value.trim(),s=$('#fs').value.trim(),c=parseInt($('#fc').value);
         if(!n||!s||!(c>=1)){$('#er').textContent='이름, 학번, 인원을 모두 입력해 주세요.';return}
         $('#fok').disabled=true;await db.collection('records').add({name:n,sid:s,count:c,clear,clearMs:clear?G.totalMs-(G.remainMs||0):G.totalMs,ts:now()});await set({registered:true})}});
-  }else show(a,'done'+clear,`<div class="end"><h1>등록되었습니다</h1><p style="font-size:24px"><b>기기를 들고 부스 앞으로 나와 주세요.</b></p></div>`);
+  }else show(a,'done'+clear,`<div class="end"><h1>등록되었습니다</h1><p style="font-size:24px"><b>기기는 그대로 두고 퇴장해 주세요.</b></p></div>`);
 }
 /* ---------- 리더보드 ---------- */
 function board(a){
@@ -222,7 +232,7 @@ function admin(a){
     <p class="lbl" style="margin:14px 0 4px">준비 시간이 끝나 게임이 시작될 때 읽을 멘트</p><div class="row"><input id="m2" style="flex:1;min-width:220px"><button id="t2">미리듣기</button></div>
     <p class="lbl">멘트는 타이머 기기에서 기본 음성(TTS)으로 재생돼요. 타이머 기기를 한 번 터치해 두어야 소리가 납니다.</p></div>
     <div class="panel"><h3>음성 안내 (바로 재생)</h3><div id="pr" class="row"></div><div class="row"><input id="vt" placeholder="직접 입력한 문장 읽어주기" style="flex:1;min-width:220px"><button id="vb">읽기</button></div></div>
-    <div class="panel"><h3>힌트 내용 설정</h3><div id="ed">불러오는 중…</div></div>
+    <div class="panel"><h3>힌트 설정 (게임 중에는 바꾸지 마세요)</h3><div id="ed">불러오는 중…</div></div>
     <div class="panel"><h3>리더보드 기록</h3><div class="row"><button id="xx">엑셀로 내려받기</button><button id="xd">기록 전체 삭제</button></div><div id="rl"></div></div></div>`;
     ['mn','sc','pp','bn','m1','m2'].forEach(i=>$('#'+i).onchange=saveS);
     $('#t1').onclick=()=>speak($('#m1').value);$('#t2').onclick=()=>speak($('#m2').value);
@@ -234,7 +244,7 @@ function admin(a){
     PRESETS.forEach(t=>{const b=document.createElement('button');b.textContent=t;b.onclick=()=>say(t);$('#pr').append(b)});
     $('#vb').onclick=()=>say($('#vt').value);
     $('#hm').onclick=()=>goRole(null);$('#xx').onclick=exportCSV;arm($('#xd'),()=>db.doc('records').delete());
-    buildEd();fillAdmin();
+    if(hsLoaded)buildEd();fillAdmin();
   }
   const s=G.status,p=phase();
   $('#st').textContent=STAT[p];
@@ -246,21 +256,41 @@ function admin(a){
   R.forEach((r,i)=>{const d=document.createElement('div');d.className='row';const sp=document.createElement('span');sp.style.flex='1';sp.textContent=`${i+1}. ${r.name} (${r.sid}) ${r.count}명 — ${r.clear?mmss(r.clearMs):'시간 초과'}`;const b=document.createElement('button');b.textContent='삭제';arm(b,()=>db.doc('records/'+r.id).delete());d.append(sp,b);rl.append(d)});
 }
 function buildEd(){
-  const ed=$('#ed');if(!ed)return;edBuilt=true;ed.innerHTML='';
-  for(let i=0;i<5;i++){
-    const x=H[i]||{};let img=x.img||'';
+  edBuilt=true;
+  ED=Array.from({length:hn()},(_,i)=>({title:H[i]?.title||'',text:H[i]?.text||'',img:H[i]?.img||''}));
+  drawEd();
+}
+function drawEd(){
+  const ed=$('#ed');if(!ed)return;ed.innerHTML='';
+  const dirty=()=>{const m=$('#hmsg');if(m)m.textContent='저장하지 않은 변경이 있어요'};
+  ED.forEach((x,i)=>{
     const d=document.createElement('div');d.className='hed';
-    d.innerHTML='<b>힌트 '+(i+1)+'</b><input class="a" placeholder="힌트 제목"><textarea class="b" rows="3" placeholder="힌트 내용"></textarea><input class="c" type="file" accept="image/*"><img class="p" alt=""><div class="row"><button class="s">저장</button><button class="x">이미지 제거</button></div>';
-    const A=d.querySelector('.a'),B=d.querySelector('.b'),P=d.querySelector('.p'),Sv=d.querySelector('.s');
-    A.value=x.title||'';B.value=x.text||'';P.hidden=!img;if(img)P.src=img;
-    d.querySelector('.c').onchange=e=>{const f=e.target.files[0];if(f)shrink(f,u=>{img=u;P.src=u;P.hidden=false})};
-    d.querySelector('.x').onclick=()=>{img='';P.hidden=true};
-    Sv.onclick=async()=>{try{await db.doc('hints/h'+i).set({title:A.value,text:B.value,img});Sv.textContent='저장됨 ✓'}catch(e){Sv.textContent='저장 실패'}setTimeout(()=>Sv.textContent='저장',2000)};
-    ed.append(d);
-  }
+    d.innerHTML='<div class="row"><b style="flex:1">힌트 '+(i+1)+'</b><button class="x">삭제</button></div><input class="a" placeholder="힌트 제목"><textarea class="b" rows="3" placeholder="힌트 내용"></textarea><input class="c" type="file" accept="image/*"><img class="p" alt=""><div class="row"><button class="r">이미지 제거</button></div>';
+    const A=d.querySelector('.a'),B=d.querySelector('.b'),P=d.querySelector('.p');
+    A.value=x.title;B.value=x.text;P.hidden=!x.img;if(x.img)P.src=x.img;
+    A.oninput=()=>{x.title=A.value;dirty()};B.oninput=()=>{x.text=B.value;dirty()};
+    d.querySelector('.c').onchange=e=>{const f=e.target.files[0];if(f)shrink(f,u=>{x.img=u;P.src=u;P.hidden=false;dirty()})};
+    d.querySelector('.r').onclick=()=>{x.img='';P.hidden=true;dirty()};
+    arm(d.querySelector('.x'),()=>{ED.splice(i,1);drawEd();dirty()});
+    ed.append(d)});
+  const r=document.createElement('div');r.className='row';r.innerHTML='<button id="ha">+ 힌트 추가</button><button id="hsv">힌트 저장</button><span class="lbl" id="hmsg"></span>';ed.append(r);
+  $('#ha').onclick=()=>{if(ED.length>=10){$('#hmsg').textContent='힌트는 최대 10개까지예요';return}ED.push({title:'',text:'',img:''});drawEd();dirty()};
+  $('#hsv').onclick=async()=>{try{await db.doc('hintset').set({n:ED.length,items:ED});$('#hmsg').textContent='저장됨 ✓'}catch(e){$('#hmsg').textContent='저장 실패'}};
 }
 function shrink(f,cb){const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const k=Math.min(1,480/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=im.width*k;c.height=im.height*k;c.getContext('2d').drawImage(im,0,0,c.width,c.height);cb(c.toDataURL('image/jpeg',.6))};im.src=r.result};r.readAsDataURL(f)}
-const ROLES=['player','admin','board'];
+const hn=()=>hsEx?H.length:4;
+function actx(){try{if(!AC)AC=new (window.AudioContext||window.webkitAudioContext)();if(AC.state==='suspended')AC.resume()}catch(e){}return AC}
+function beep(t,dur,f,vol){const c=actx();if(!c)return;const o=c.createOscillator(),g=c.createGain();o.type='square';o.frequency.value=f;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(vol,t+.005);g.gain.setValueAtTime(vol,t+dur-.01);g.gain.linearRampToValueAtTime(0,t+dur);o.connect(g);g.connect(c.destination);o.start(t);o.stop(t+dur+.02)}
+function tickBeep(hi){const c=actx();if(c)beep(c.currentTime+.01,.08,hi?1500:1000,.3)}
+function alarm(){const c=actx();if(!c)return;const t0=c.currentTime+.05;for(let g=0;g<5;g++)for(let k=0;k<4;k++)beep(t0+g+k*.14,.09,k===3?2000:1600,.4)}
+function tv(a){
+  document.body.className='dark';
+  const p=phase(),fin=p==='finished'&&!tvHold,k='tv|'+p+'|'+fin+'|'+primed+'|'+G.result;
+  const h=fin?`<div class="full"><div class="c" style="text-align:center;padding:0 5vw"><div class="tvt">${G.result==='clear'?'탈출 성공':'시간 종료'}</div><div class="tvm">태블릿 화면에서 리더보드를 입력하고<br>안내에 따라 퇴장해주세요.</div></div></div>`
+   :`<div class="full"><div class="c"><div class="lbl" style="font-size:clamp(20px,3vw,40px)">${p==='prep'?'게임 시작까지':'남은 시간'}</div><div class="huge" data-timer>${tHTML(shown())}</div>${primed?'':'<div class="mini">화면을 한 번 클릭하면 소리가 켜집니다</div>'}</div></div>`;
+  show(a,k,h);
+}
+const ROLES=['player','admin','board','tv'];
 const hashRole=()=>{const h=location.hash.slice(1);return ROLES.includes(h)?h:null};
 function goRole(r){role=r||null;const a=$('#app');clearTimeout(swapT);a.classList.remove('out');a.dataset.k='';a.innerHTML='';built=false;bHead='';bRows='';view='main';
   if(r){if(location.hash.slice(1)!==r)location.hash=r}else history.replaceState(null,'',location.pathname+location.search);render()}
